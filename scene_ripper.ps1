@@ -12,10 +12,23 @@ Get-ChildItem $indir -Filter *.* | ForEach-Object {
     New-Item -ItemType Directory -Force -Path $outputFolder 
     $output = $outputFolder + '/' + $baseName
 
-    #using scene detection
-    # & ffmpeg -hide_banner -i "$input" -vf "scdet" -sn -map 0 -f segment -segment_format mp4 "${output}__%07d_detect.mp4"
+    #detect if media has P/B frames and if so, use scene detection, otherwise use keyframes
+    $ffprobe = ffmpeg -hide_banner -i "$input" -vf "showinfo" -f null - 2>&1
+    $ffprobe | Select-String -Pattern "P:" -Quiet
+    $hasP = $?
+    $ffprobe | Select-String -Pattern "B:" -Quiet
+    $hasB = $?
+    if ($hasP -or $hasB) {
+        $sceneDetect = $true
+    } else {
+        $sceneDetect = $false
+    }
     
-    #using source keyframe data
-    & ffmpeg -hide_banner -i "$input" -c copy -map 0 -segment_time 0.01 -f segment "${output}__%07d_key.mp4"
-
+    #using scene detection
+    if ($sceneDetect) {
+        & ffmpeg -hide_banner -i "$input" -vf "scdet" -sn -map 0 -f segment -segment_format mp4 "${output}__%07d_detect.mp4"
+    } else {
+        #using source keyframe data
+        & ffmpeg -hide_banner -i "$input" -c copy -map 0 -segment_time 0.01 -f segment "${output}__%07d_key.mp4"
+    }
 }
